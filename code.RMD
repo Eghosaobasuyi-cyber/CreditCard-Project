@@ -1,0 +1,457 @@
+---
+title: "Initial Results and Code"
+author: "Eghosa Obasuyi"
+date: "22/06/2020"
+output:
+  word_document: default
+  html_document: default
+  
+---
+```{r setup, cache = F}
+knitr::opts_chunk$set(error = TRUE, fig.width=12, fig.height=8, fig.path='Figs/', echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+```{r}
+### we import our credit card dataset into r. note the data has ##been saved in pc.link to the data: ##(https://www.kaggle.com/jacklizhi/creditcard) 
+```
+
+```{r}
+#library(readr)
+creditcard <- read.csv("C:/Users/eghos/Downloads/creditcard.csv")
+head(creditcard) # 1st 6 rows of creditcard dataset
+tail(creditcard) # last 6 rows of creditcard dataset
+#View(creditcard) # view the table 
+```
+
+# we check for missing values in the dataset
+```{r}
+sum(is.na(creditcard)) # there are no missing values 
+```
+#we check for duplicate values in the dataset
+```{r}
+sum(duplicated(creditcard))#we have 1081 duplcates in our dataset and we would remove these since we do not want duplicates affecting out results
+```
+#remove duplicates by excluding them
+```{r}
+creditcard <- creditcard[!duplicated(creditcard), ]
+sum(duplicated(creditcard))
+```
+# we can get the summary of the creditcard dataset 
+```{r}
+summary(creditcard)
+```
+# we get the descriptive stats of the dataset
+```{r echo=FALSE}
+#install.packages("pastecs")
+#library(pastecs)
+stat.desc(creditcard, basic=F)
+```
+#we see that the class attribute is better as a factor showing levels 0 and 1 so we change this
+```{r}
+creditcard$Class <- as.factor(creditcard$Class)
+```
+
+#create a boxplot for transaction amount variable to view outliers
+
+```{r}
+plot(creditcard$Amount, ylab = "TRANSACTION AMOUNT")
+```
+#create a barplot to view the class attribute and its two levels
+```{r echo=FALSE}
+library(ggplot2)
+barplot(prop.table(table(creditcard$Class))) #we can see that the data from our response variable is highly imbalanced. only a very small portion of the data are represented in class 1. we would need to balance this before building our model.
+```
+#create a histogram to further view the distribution of the amount
+```{r}
+hist(creditcard$Amount)
+```
+#create a histogram to view the distribution of time variables, breaks are added to show more details on the distribution
+```{r}
+hist(creditcard$Time, breaks = c(0, 50000, 100000,150000, 200000))
+```
+#we can plot histograms for all the V1-V28(index 2-29. we use the free_x since our variables may not be of the same scale.
+```{r}
+library(tidyr)
+ggplot(gather(creditcard[2:29]), aes(value)) + geom_histogram(bins = 10)+
+  facet_wrap(~key, scales = 'free_x')
+```
+#as part of bivariate analysis we can find the mean, sd, min, max of the different levels in our class attribute based on the transactions amount for example
+
+```{r}
+by(creditcard$Amount, creditcard$Class, mean)
+by(creditcard$Amount, creditcard$Class, median)
+by(creditcard$Amount, creditcard$Class, min)
+by(creditcard$Amount, creditcard$Class, max)
+by(creditcard$Amount, creditcard$Class, sd)
+```
+
+#we perform bivariate analysis on some of the input variables and the response variable using t-test. Here our null hypothesie would emanthat our null hypothese for each case assumes that the variable sample means are equal and alternative hypothesis assumes that they are different. this gives some explantion on the mean where the trnsaction is fraud and where the transaction is legitimate.
+
+```{r}
+t.test(creditcard$Amount ~ creditcard$Class)
+t.test(creditcard$V1 ~ creditcard$Class)
+t.test(creditcard$V2 ~ creditcard$Class)
+t.test(creditcard$V3 ~ creditcard$Class)
+t.test(creditcard$V4 ~ creditcard$Class)
+```
+#we can also use boxplots or scatter plot in the bivariate analysis
+
+```{r}
+plot(creditcard$V1, creditcard$Amount)
+plot(creditcard$V2, creditcard$Amount)
+plot(creditcard$V3, creditcard$Amount)
+plot(creditcard$V4, creditcard$Amount)
+```
+#we can check to see the correlation of some of the input varaibles amongst themselves, using pearson correcltion which is the defualt correlation in r
+```{r}
+creditcard$Class <- as.numeric(creditcard$Class)
+correlation <- cor(creditcard[,2:31], creditcard[,2:31])
+correlation
+#we can also use spearman correlation since our dataset has outliers and is not normally distibution
+correlationspearman <- cor(creditcard[,2:31], creditcard[,2:31], method = "spearman")
+correlationspearman
+```
+#we can find the varibles that are highly correlated. for example we create a function to find the top 20 correlated variables
+
+```{r}
+mosthighlycorrelated <- function(mydataframe,numtoreport)
+  {
+     # find the correlations
+     cormatrix <- cor(mydataframe)
+     # set the correlations on the diagonal or lower triangle to zero,
+     # so they will not be reported as the highest ones:
+     diag(cormatrix) <- 0
+     cormatrix[lower.tri(cormatrix)] <- 0
+     # flatten the matrix into a dataframe for easy sorting
+     fm <- as.data.frame(as.table(cormatrix))
+     # assign human-friendly names
+     names(fm) <- c("First.Variable", "Second.Variable","Correlation")
+     # sort and print the top n correlations
+     head(fm[order(abs(fm$Correlation),decreasing=T),],n=numtoreport)
+}
+mosthighlycorrelated(creditcard[2:30], 20)
+```
+
+
+# we find the correlation between all the input variables (apart from time) and the class attribute.
+
+```{r}
+cor(creditcard$Class, creditcard[,2:30]) # we see that V11 has the strongest positive correlation with the response variables at 0.1 and V17 has the strongest negative correlation with the response variable at -0.3, however non of the variables is correlated with the response variable based on the overall low correlations
+```
+#we can also make boxplots between the response variable and input variable to understand the outliers and see how the two levels appear side by side 
+```{r}
+ boxplot(creditcard$Amount[creditcard$Class==0], creditcard$Amount[creditcard$Class==1])
+```
+#we can also use pairs to compare some of the numeric variables,  (excluding our time variable)
+```{r}
+pairs(creditcard[,2:3])
+pairs(creditcard[,4:5])
+```
+#we will also perfrom multivariate analysis, we wil start by creating a muliple linear regression model
+```{r}
+fit <- lm(creditcard$Class ~ ., data = creditcard[2:30])
+summary(fit)
+```
+
+#we will use the one way analysis of variance (ANOVA)
+
+```{r}
+anova <- aov(formula = creditcard$Amount + creditcard$V1 + creditcard$V2 ~ creditcard$Class)
+summary(anova)
+```
+# because we are dealing with solving problems relating to credit fraud strategy, we might be interested to know the transactions that were fraudulent, so we can subset this part of our data and look into it further.
+
+```{r}
+fraud_data <- creditcard[creditcard$Class==1, ]
+head(fraud_data)
+max(fraud_data$Amount)
+min(fraud_data$Amount)
+hist(fraud_data$Amount) #looks like alot of fraud transactios are actually 0 dollars which could mean these were test transactions, failed attempts or card registration
+sum(fraud_data$Amount==0)
+plot(fraud_data$Amount)
+```
+#normalizing the dataset # exploratory analysis, we apply a function that helps to normalise the numeric variables  in our dataset, (apart from our time variable) in preparation for our modelling 
+
+```{r}
+creditcard_norm <- as.data.frame(apply(creditcard[, 2:30], 2, function(x) (x - min(x))/(max(x)-min(x)))) #add back time and class
+creditcard_norm$Time <- creditcard$Time 
+creditcard_norm$class <- creditcard$Class
+head(creditcard_norm)
+creditcard_norm <- creditcard_norm[c(30,1:29,31)] #repositioning the variables 
+head(creditcard_norm)
+```
+#as part of our exploratory analysis we would apply k-means clustering to group our dataset 
+```{r}
+split_data <- sample(1:nrow(creditcard_norm), 0.9 * nrow(creditcard_norm)) 
+# using out normalized data set we create training and test data
+##extract training set
+train <- creditcard_norm[split_data,] 
+##extract testing set
+test <- creditcard_norm[-split_data,] 
+# extract the class attribute from training dataset for the KNN model 
+class_attr <- creditcard_norm[split_data,31]
+##extract class attribute of test dataset to measure the accuracy
+test_classattr <- creditcard_norm[-split_data,31]
+##load the package class
+library(class)
+##run knn model, to determine value of we take the square root of total # of observations sqrt(283726)/2 which is 266 approx, however to keep the # odd we set k= 267
+ cluster <- knn(train, test, cl=class_attr, k=267)
+##create confusion matrix
+ conf_matrix <- table(cluster, test_classattr)
+ conf_matrix
+ summary(conf_matrix)
+ ##get the model accuracy
+ model_accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
+ model_accuracy(conf_matrix)# based on the results of 99.81 we have a very accurate model.
+```
+#we also do feature selection to take only the important features. to do this we can make use of stepwise forward and backward selection.
+```{r}
+# before starting we have to change our class attribute to numeric as stepwise do not make meaningful selection with factor variables
+# Step 1: Define base intercept 
+base_model <- lm(creditcard_norm$class ~ 1 , data=creditcard_norm)  
+
+# Step 2: Full model with predictors
+all_model <- lm(creditcard_norm$class ~ . , creditcard_norm) 
+
+# Step 3: Perform step-wise algorithm. we want backward and forward so we use both under direction
+stepwise_mod <- step(base_model, scope = list(lower = base_model, upper = all_model), direction = "both", trace = 0, steps = 1000)  
+
+# Step 4: Get the variables recommended by our model.
+selected_var<- names(unlist(stepwise_mod[[1]])) 
+selected_var <- selected_var[!selected_var %in% "(Intercept)"] # remove the intercept
+
+# Show
+print(selected_var) #looks like all the variables were selected.
+```
+#next we can apply principal component analysis to the dataset. this would enable use see what variables account for most of the variance in our class attribute.we do not need to add the time variable and class variable
+```{r}
+creditcard_norm.pca <- princomp(creditcard_norm, cor = TRUE, scores = TRUE)
+summary(creditcard_norm.pca)
+plot(creditcard_norm.pca)
+plot(creditcard_norm.pca, type = "l")
+```
+# As part of our experimental design we would split our data into training data and test data.
+```{r}
+#install.packages(caTools")
+library(caTools)
+set.seed(123)
+sample_data <- sample.split(creditcard_norm$class, SplitRatio = 0.80)
+train_data <- subset(creditcard_norm,sample_data==TRUE)
+test_data <- subset(creditcard_norm, sample_data==FALSE)
+summary(train_data$class)
+
+```
+#earlier we noticed a huge imbalance in our dataset, so we are going to deal with this problem using the random oversampling and undersampling method.
+```{r, echo=FALSE}
+# here we see we have 226602 legitimate txns and 378 fraudulent txns denoted by 0 and 1 totalling 226980. we could make each class 50% of total observations.
+table(train_data$class)
+txns_new <- 226980
+updated_fraud <- 0.50
+#library(ROSE)
+sampling_data <- ovun.sample(class ~ ., data = train_data, method = "both", N = txns_new,  p = updated_fraud, seed = 2019)
+sampled_txns <-sampling_data$data
+table(sampled_txns$class)
+plot(sampled_txns$class)
+```
+# we would also perform cross validation on the dataset, we will use the caret package R2
+```{r echo=FALSE}
+#library(caret)
+ind <- sample.split(creditcard_norm$class, SplitRatio = 0.80)
+trainDF <- creditcard_norm[ind,]
+testDF <- creditcard_norm[-ind,]
+# prepare the data for cross validation 
+trainDF$class <-as.numeric(trainDF$class)
+testDF$class <-as.numeric(testDF$class)
+set.seed(123)
+# Build the model, we would use the Validation set Approach
+model <- lm(trainDF$class ~., data = trainDF)
+# Make predictions and compute the R2, RMSE and MAE
+predictions <- model %>% predict(testDF)
+data.frame( R2 = R2(predictions, testDF$class),
+            RMSE = RMSE(predictions, testDF$class),
+            MAE = MAE(predictions, testDF$class))
+# calculate the prediction rate error 
+RMSE(predictions, testDF$class)/mean(testDF$class)
+```
+# now we would start with our Autoencoder mode.we make use of our training and test dataset that were split earlier on during cross validation. 
+
+```{r}
+as.factor(train_data$class)# note that r has not changed the levels in our class attribute to 1 and 2 so the model is adjusted to cater for this 1 represents-legitimate txns and 2 represents fraudulent transaction.
+x_train <- train_data %>%
+  select(-class) %>%
+  as.matrix() # keras model works with matrix
+
+x_test <- test_data %>%
+  select(-class) %>%
+  as.matrix()
+
+y_train <- (train_data$class)
+y_test <- (test_data$class)
+```
+
+# we would be using the Keras package in r for our autoencoder, this a generative adversarial network that allows for classification in imbalanced dataset.
+```{r}
+#install.packages("keras")
+#library(keras)
+model <- keras_model_sequential() # here we use 20 units in the input layer, than have 2 hidden layers and one output layer, we choose RelU for our activation to enable us use backpropagation
+model %>%
+  layer_dense(units = 20, activation = "relu", input_shape = ncol(x_train)) %>%
+  layer_dense(units = 20, activation = "relu") %>%
+  layer_dense(units = 20, activation = "relu") %>%
+  layer_dense(units = ncol(x_train))
+summary(model)  # summarise the model
+```
+# we then compile using the compile funcion in keras the loss function would be calculated by mean squared error (MSE) and an optimizer Adam. Adam is a fast learning optimzer
+
+```{r}
+# keras_compile(model,loss = 'mean_squared_error', optimizer = "adam", metrics = c('accuracy'))
+model %>% compile(
+  loss = "mean_squared_error", 
+  optimizer = "adam",
+  metrics = c('accuracy')
+  )
+```
+# we will then begin to train our model using the fit () function also in keras. we would be using 100 epochs for to train the model and would set our batch size to 32
+
+```{r}
+checkpoint <- callback_model_checkpoint( # we will use the callback function to save our model after each epoch
+  filepath = "model.hdf5", 
+  save_best_only = TRUE, 
+  save_freq = "epoch",
+  verbose = 1
+)
+
+early_stopping <- callback_early_stopping(patience = 5) # we want to stop epochs if there in no loss reduction in 5 consequtive epochs.
+
+model_history <- model %>% fit(
+  x = x_train[y_train == 1,], 
+  y = x_train[y_train == 1,], 
+  epochs = 100, 
+  batch_size = 32, 
+  show_accuracy = True, # apart from showing the loss we also want to show the acuracy of the model so we use the show_aaccracy argument 
+  validation_data = list(x_test[y_test == 1,], x_test[y_test == 1,]), 
+  callbacks = list(checkpoint, early_stopping)
+)
+```
+# visualize the model
+```{r}
+plot(model_history) # a basic scatter plot of our model metrics 
+history_df <- as.data.frame(model_history) # we can also put model history in a dataframe
+str(history_df)
+
+# Plot the model loss of the training data
+plot(model_history$metrics$loss, main="Model Loss", xlab = "epoch", ylab="loss", col="blue", type="l")
+
+# Plot the model loss of the test data
+lines(model_history$metrics$val_loss, col="green")
+
+# Add legend
+legend("topright", c("train","test"), col=c("blue", "green"), lty=c(1,1))
+# Plot the model accuracy of the training data
+plot(model_history$metrics$accuracy, main="Model Accuracy", xlab = "epoch", ylab="Accuracy", col="blue", type="l")
+
+# Plot the model accuracy of the test data
+lines(model_history$metrics$val_accuracy, col="green")
+
+# Add legend
+legend("topright", c("train","test"), col=c("blue", "green"), lty=c(1,1))
+```
+
+# after training we evaluate the loss for the test dataset, using the evaluate function in keras, this would enable us see the loss value and metric value
+```{r}
+model_loss <- evaluate(model, x = x_test[y_test == 1,], y = x_test[y_test == 1,])
+model_loss
+```
+
+```{r}
+predict_train <- predict(model, x_train)
+mse_train <- apply((x_train - predict_train)^2, 1, sum)
+
+
+predict_test <- predict(model, x_test)
+mse_test <- apply((x_test - predict_test)^2, 1, sum)
+library(Metrics) # we use this to see the area under the ROC curve 
+auc(y_train, mse_train)  prediction 
+auc(y_test, mse_test)
+```
+# what if we add another layer to our model and increase the units to 50 on the outer layer.
+```{r}
+model <- keras_model_sequential() # here we use 64 units in the input layer, than have 2 hidden layers and one output layer, we choose RelU for our activation to enable us use backpropagation
+model %>%
+  layer_dense(units = 50, activation = "relu", input_shape = ncol(x_train)) %>%
+  layer_dense(units = 20, activation = "relu") %>%
+  layer_dense(units = 20, activation = "relu") %>%
+  layer_dense(units = 20, activation = "relu") %>%
+  layer_dense(units = ncol(x_train))
+summary(model)
+```
+# compile the model
+```{r}
+# keras_compile(model,loss = 'mean_squared_error', optimizer = "adam", metrics = c('accuracy'))
+model %>% compile(
+  loss = "mean_squared_error", 
+  optimizer = "adam",
+  metrics = c('accuracy')
+  )
+```
+#we also increase batch size to 48.
+```{r}
+checkpoint <- callback_model_checkpoint( # we will use the callback function to save our model after each epoch
+  filepath = "model.hdf5", 
+  save_best_only = TRUE, 
+  save_freq = "epoch",
+  verbose = 1
+)
+
+early_stopping <- callback_early_stopping(patience = 5) # we want to stop epochs if there in no loss reduction in 5 consequtive epochs.
+
+model_history <- model %>% fit(
+  x = x_train[y_train == 1,], 
+  y = x_train[y_train == 1,], 
+  epochs = 100, 
+  batch_size = 48, 
+  show_accuracy = True, # apart from showing the loss we also want to show the acuracy of the model so we use the show_aaccracy argument 
+  validation_data = list(x_test[y_test == 1,], x_test[y_test == 1,]), 
+  callbacks = list(checkpoint, early_stopping)
+)
+```
+# we can get visualization of our model
+```{r}
+plot(model_history) # a basic scatter plot of our model metrics 
+history_df <- as.data.frame(model_history) # we can also put model history in a dataframe
+str(history_df)
+
+# Plot the model loss of the training data and add some color
+plot(model_history$metrics$loss, main="Model Loss", xlab = "epoch", ylab="loss", col="blue", type="l")
+
+# Plot the model loss of the test data
+lines(model_history$metrics$val_loss, col="green")
+
+# Add legend
+legend("topright", c("train","test"), col=c("blue", "green"), lty=c(1,1))
+# Plot the model accuracy of the training data
+plot(model_history$metrics$accuracy, main="Model Accuracy", xlab = "epoch", ylab="Accuracy", col="blue", type="l")
+
+# Plot the model accuracy of the test data
+lines(model_history$metrics$val_accuracy, col="green")
+
+# Add legend
+legend("topright", c("train","test"), col=c("blue", "green"), lty=c(1,1))
+```
+# after training we evaluate the loss for the test dataset, using the evaluate function in keras, this would enable us see the loss value and metric value
+```{r}
+model_loss <- evaluate(model, x = x_test[y_test == 1,], y = x_test[y_test == 1,])
+model_loss
+```
+# we can also plot the model prediction using AUC, this is to assess the prbabilit of our prediction.
+```{r}
+predict_train <- predict(model, x_train) 
+mse_train <- apply((x_train - predict_train)^2, 1, sum)
+
+
+predict_test <- predict(model, x_test)
+mse_test <- apply((x_test - predict_test)^2, 1, sum)
+library(Metrics) # we use this to see the area under the ROC curve 
+auc(y_train, mse_train)# the hgher results signify better
+auc(y_test, mse_test)
+```
